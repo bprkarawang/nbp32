@@ -39,10 +39,10 @@
 <div class="container">
     <header>
         <h1>SISTEM ANTRIAN NASABAH</h1>
-        <p>PT BPR NBP 32 (HTTP Tunnel Engine)</p>
+        <p>PT BPR NBP 32 (Private REST Tunnel)</p>
     </header>
     
-    <div id="connection-status" class="status-koneksi">🟢 Jalur Aman HTTP Aktif (Bypass Firewall Kantor)</div>
+    <div id="connection-status" class="status-koneksi">🟢 Jaringan Mandiri Aktif (Sinkronisasi Lintas PC)</div>
 
     <div class="role-selector">
         <button class="btn-role active" onclick="switchRole('satpam')">SATPAM (Input)</button>
@@ -110,8 +110,11 @@
 </div>
 
 <script>
-    // URL REST API Firebase (Bypass WebSocket menggunakan .json)
-    const API_URL = "https://bpr32-antrian-default-rtdb.asia-southeast1.firebasedatabase.app/antrian_bpr32.json";
+    // URL REST API Firebase Terintegrasi Otomatis
+    const BASE_DB_URL = "https://antrian-9cdeb-default-rtdb.asia-southeast1.firebasedatabase.app/";
+    
+    const cleanUrl = BASE_DB_URL.endsWith('/') ? BASE_DB_URL : BASE_DB_URL + '/';
+    const API_URL = cleanUrl + "antrian_bpr32.json";
 
     let state = {
         cs: { total: 0, sekarang: 0 },
@@ -121,7 +124,6 @@
         last_voice: ""
     };
 
-    // AMBIL DATA DARI CLOUD (Metode HTTP GET)
     function tarikDataDariCloud() {
         fetch(API_URL)
         .then(response => response.json())
@@ -134,7 +136,6 @@
 
                 updateDisplay();
 
-                // Cek instruksi suara baru
                 if (data.last_voice && data.last_voice !== localStorage.getItem('last_played_voice') && data.last_voice !== "Reset") {
                     panggilSuara(data.last_voice);
                     localStorage.setItem('last_played_voice', data.last_voice);
@@ -144,7 +145,6 @@
         .catch(err => console.error("Koneksi HTTP Terganggu:", err));
     }
 
-    // KIRIM DATA KE CLOUD (Metode HTTP PUT)
     function kirimDataKeCloud(suaraTeks = "") {
         if (suaraTeks) state.last_voice = suaraTeks;
         
@@ -158,8 +158,8 @@
         .catch(err => console.error("Gagal update cloud via HTTP:", err));
     }
 
-    // Lakukan sinkronisasi otomatis super cepat (setiap 0.8 detik) lewat jalur web standar
-    setInterval(tarikDataDariCloud, 800);
+    // Interval pembacaan sinkronisasi otomatis dipercepat menjadi 0.7 detik
+    setInterval(tarikDataDariCloud, 700);
 
     function switchRole(role) {
         document.querySelectorAll('.btn-role').forEach(btn => btn.classList.remove('active'));
@@ -276,7 +276,7 @@
         }
     }
 
-    // Load data awal saat halaman dibuka
+    // Jalankan sinkronisasi awal saat web dibuka
     tarikDataDariCloud();
 </script>
 </body>
