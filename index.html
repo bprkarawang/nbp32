@@ -29,23 +29,23 @@
         .btn-action { padding: 6px 12px; border: none; border-radius: 3px; cursor: pointer; font-weight: bold; color: white; }
         .btn-panggil-ulang { background-color: #0056b3; }
         .btn-selesai-operan { background-color: #28a745; }
-        .status-koneksi { text-align: center; font-size: 12px; margin-bottom: 10px; color: #6c757d; font-weight: bold; }
+        .status-koneksi { text-align: center; font-size: 13px; margin-bottom: 15px; color: #6c757d; font-weight: bold; padding: 5px; background: #fff; border-radius: 5px; display: inline-block; width: 100%; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
         .blink-border { animation: borderBlink 1.5s infinite; }
         @keyframes borderBlink { 0% { border-color: #ffc107; } 50% { border-color: #dc3545; } 100% { border-color: #ffc107; } }
     </style>
     
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/8.10.1/firebase-app.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/8.10.1/firebase-database.min.js"></script>
 </head>
 <body>
 
 <div class="container">
     <header>
         <h1>SISTEM ANTRIAN NASABAH</h1>
-        <p>PT BPR NBP 32 (Firebase Realtime Hub)</p>
+        <p>PT BPR NBP 32 (Firebase Cloud Engine)</p>
     </header>
     
-    <div id="connection-status" class="status-koneksi">🔄 Menghubungkan ke Google Firebase Datacenter...</div>
+    <div id="connection-status" class="status-koneksi">🔄 Memuat modul database & menghubungkan...</div>
 
     <div class="role-selector">
         <button class="btn-role active" onclick="switchRole('satpam')">SATPAM (Input)</button>
@@ -113,15 +113,14 @@
 </div>
 
 <script>
-    // Konfigurasi Cluster Google Firebase Publik BPR32 (Siap Pakai)
+    const statusDiv = document.getElementById('connection-status');
+    
+    // Konfigurasi Cluster Google Firebase BPR32 Publik Pasca-Verifikasi
     const firebaseConfig = {
         databaseURL: "https://bpr32-antrian-default-rtdb.asia-southeast1.firebasedatabase.app/"
     };
-    
-    // Inisialisasi Firebase
-    firebase.initializeApp(firebaseConfig);
-    const db = firebase.database().ref("antrian_bpr32");
 
+    let db;
     let state = {
         cs: { total: 0, sekarang: 0 },
         teller: { total: 0, sekarang: 0 },
@@ -130,46 +129,71 @@
         last_voice: ""
     };
 
-    // MENDENGARKAN PERUBAHAN DATA SECARA REALTIME DARI KOMPUTER MANAPUN
-    db.on('value', (snapshot) => {
-        const data = snapshot.val();
-        const statusDiv = document.getElementById('connection-status');
-        
-        statusDiv.innerText = "🟢 Terhubung Server Firebase Google (Data Sinkron Lintas PC)";
-        statusDiv.style.color = "#28a745";
-
-        if (data) {
-            // Ambil data terbaru dari Cloud
-            state.cs = data.cs || { total: 0, sekarang: 0 };
-            state.teller = data.teller || { total: 0, sekarang: 0 };
-            state.operan = data.operan || [];
-            state.override = data.override || "";
-            
-            updateDisplay();
-
-            // Cek jika ada trigger suara baru yang dipancarkan komputer lain
-            if (data.last_voice && data.last_voice !== localStorage.getItem('last_played_voice')) {
-                panggilSuara(data.last_voice);
-                localStorage.setItem('last_played_voice', data.last_voice);
+    function startSistem() {
+        try {
+            if (typeof firebase === 'undefined') {
+                statusDiv.innerText = "❌ Gagal memuat komponen Firebase. Periksa koneksi internet kantor Anda.";
+                statusDiv.style.color = "#dc3545";
+                return;
             }
-        } else {
-            // Jika database cloud kosong, upload template awal
-            pushToCloud();
-        }
-    });
 
-    // FUNGSI UNTUK MELEMPAR DATA KE CLOUD AGAR SEMUA PC BERUBAH DETIK ITU JUGA
-    function pushToCloud(suaraTeks = "") {
-        if(suaraTeks) {
-            state.last_voice = suaraTeks;
+            // Inisialisasi Firebase aman
+            firebase.initializeApp(firebaseConfig);
+            db = firebase.database().ref("antrian_bpr32");
+
+            // Monitor status koneksi websocket internal Firebase
+            firebase.database().ref(".info/connected").on("value", function(snap) {
+                if (snap.val() === true) {
+                    statusDiv.innerText = "🟢 Hub Jaringan Firebase Aktif (Data Sinkron 100% Lintas PC)";
+                    statusDiv.style.color = "#28a745";
+                } else {
+                    statusDiv.innerText = "🔄 Mencari jalur cloud kosong / Menghubungkan ulang...";
+                    statusDiv.style.color = "#ffc107";
+                }
+            });
+
+            // Sinkronisasi data realtime masuk
+            db.on('value', (snapshot) => {
+                const data = snapshot.val();
+                if (data) {
+                    state.cs = data.cs || { total: 0, sekarang: 0 };
+                    state.teller = data.teller || { total: 0, sekarang: 0 };
+                    state.operan = data.operan || [];
+                    state.override = data.override || "";
+                    
+                    updateDisplay();
+
+                    if (data.last_voice && data.last_voice !== localStorage.getItem('last_played_voice') && data.last_voice !== "Reset") {
+                        panggilSuara(data.last_voice);
+                        localStorage.setItem('last_played_voice', data.last_voice);
+                    }
+                } else {
+                    pushToCloud();
+                }
+            }, (error) => {
+                statusDiv.innerText = "❌ Kesalahan Hak Akses: " + error.message;
+                statusDiv.style.color = "#dc3545";
+            });
+
+        } catch (err) {
+            statusDiv.innerText = "❌ Error Sistem: " + err.message;
+            statusDiv.style.color = "#dc3545";
         }
-        db.set(state);
+    }
+
+    function pushToCloud(suaraTeks = "") {
+        if (db) {
+            if(suaraTeks) state.last_voice = suaraTeks;
+            db.set(state).catch(err => {
+                console.error("Gagal mengirim data:", err);
+            });
+        }
     }
 
     function switchRole(role) {
         document.querySelectorAll('.btn-role').forEach(btn => btn.classList.remove('active'));
         document.querySelectorAll('.panel').forEach(panel => panel.classList.remove('active'));
-        event.target.classList.add('active');
+        if (event && event.target) event.target.classList.add('active');
         document.getElementById(`panel-${role}`).classList.add('active');
         updateDisplay();
     }
@@ -237,7 +261,6 @@
     }
 
     function updateDisplay() {
-        // Render Tampilan CS
         if (state.cs.sekarang > 0) {
             document.getElementById('cs-sekarang').innerText = 'A-' + String(state.cs.sekarang).padStart(3, '0');
             document.getElementById('btn-oper-teller').style.display = 'block';
@@ -247,7 +270,6 @@
         }
         document.getElementById('cs-total').innerText = 'A-' + String(state.cs.total).padStart(3, '0');
 
-        // Render Tampilan Teller
         if (state.override) {
             document.getElementById('teller-sekarang').innerText = state.override;
         } else {
@@ -255,7 +277,6 @@
         }
         document.getElementById('teller-total').innerText = 'B-' + String(state.teller.total).padStart(3, '0');
 
-        // Render Box Notif Operan
         let notifBox = document.getElementById('notif-dari-cs');
         let nomorOperanSpan = document.getElementById('nomor-operan');
         if (state.operan && state.operan.length > 0) {
@@ -280,9 +301,12 @@
         if (confirm('Reset ulang semua nomor antrian ke nol di cloud server?')) {
             state = { cs: { total: 0, sekarang: 0 }, teller: { total: 0, sekarang: 0 }, operan: [], override: "", last_voice: "Reset" };
             document.getElementById('ticket-area').style.display = 'none';
-            db.set(state);
+            if(db) db.set(state);
         }
     }
+
+    // Eksekusi inisialisasi aman
+    window.onload = startSistem;
 </script>
 </body>
 </html>
