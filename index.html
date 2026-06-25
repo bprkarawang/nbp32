@@ -33,17 +33,19 @@
         .blink-border { animation: borderBlink 1.5s infinite; }
         @keyframes borderBlink { 0% { border-color: #ffc107; } 50% { border-color: #dc3545; } 100% { border-color: #ffc107; } }
     </style>
-    <script src="https://js.pusher.com/8.4.0/pusher.min.js"></script>
+    
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 </head>
 <body>
 
 <div class="container">
     <header>
         <h1>SISTEM ANTRIAN NASABAH</h1>
-        <p>PT BPR NBP 32 (Pusher Synchronized)</p>
+        <p>PT BPR NBP 32 (Firebase Realtime Hub)</p>
     </header>
     
-    <div id="connection-status" class="status-koneksi">🔄 Menghubungkan ke Cloud Pusher...</div>
+    <div id="connection-status" class="status-koneksi">🔄 Menghubungkan ke Google Firebase Datacenter...</div>
 
     <div class="role-selector">
         <button class="btn-role active" onclick="switchRole('satpam')">SATPAM (Input)</button>
@@ -111,105 +113,58 @@
 </div>
 
 <script>
-    // State Default Sistem Antrian
+    // Konfigurasi Cluster Google Firebase Publik BPR32 (Siap Pakai)
+    const firebaseConfig = {
+        databaseURL: "https://bpr32-antrian-default-rtdb.asia-southeast1.firebasedatabase.app/"
+    };
+    
+    // Inisialisasi Firebase
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database().ref("antrian_bpr32");
+
     let state = {
         cs: { total: 0, sekarang: 0 },
         teller: { total: 0, sekarang: 0 },
         operan: [],
-        override: ""
+        override: "",
+        last_voice: ""
     };
 
-    // Konfigurasi Pusher Akun Anda
-    const PUSHER_KEY = '6c066c87c039a921bc6d';
-    const PUSHER_CLUSTER = 'ap1';
-    
-    let pusher, channel;
-
-    function initNetwork() {
-        pusher = new Pusher(PUSHER_KEY, {
-            cluster: PUSHER_CLUSTER,
-            forceTLS: true
-        });
-
+    // MENDENGARKAN PERUBAHAN DATA SECARA REALTIME DARI KOMPUTER MANAPUN
+    db.on('value', (snapshot) => {
+        const data = snapshot.val();
         const statusDiv = document.getElementById('connection-status');
         
-        pusher.connection.bind('state_change', function(states) {
-            if(states.current === 'connected') {
-                statusDiv.innerText = "🟢 Terhubung Cloud Pusher (Sinkronisasi Aktif)";
-                statusDiv.style.color = "#28a745";
-            } else {
-                statusDiv.innerText = "🔄 Menyambungkan ulang ke cloud...";
-                statusDiv.style.color = "#ffc107";
-            }
-        });
+        statusDiv.innerText = "🟢 Terhubung Server Firebase Google (Data Sinkron Lintas PC)";
+        statusDiv.style.color = "#28a745";
 
-        // Berlangganan ke channel khusus antrian BPR 32
-        channel = pusher.subscribe('bpr32-queue-channel');
-        
-        // MENDENGARKAN SIARAN DATA DARI KOMPUTER LAIN
-        channel.bind('bpr32-queue-event', function(dataPusher) {
-            if (dataPusher && dataPusher.state) {
-                state = dataPusher.state;
-                localStorage.setItem('bpr32_state_pusher', JSON.stringify(state));
-                updateDisplay();
-                
-                // Jika ada instruksi suara masuk
-                if (dataPusher.suara) {
-                    panggilSuara(dataPusher.suara);
-                }
-            }
-        });
+        if (data) {
+            // Ambil data terbaru dari Cloud
+            state.cs = data.cs || { total: 0, sekarang: 0 };
+            state.teller = data.teller || { total: 0, sekarang: 0 };
+            state.operan = data.operan || [];
+            state.override = data.override || "";
+            
+            updateDisplay();
 
-        // Ambil data awal dari memory local browser jika ada
-        if (localStorage.getItem('bpr32_state_pusher')) {
-            state = JSON.parse(localStorage.getItem('bpr32_state_pusher'));
+            // Cek jika ada trigger suara baru yang dipancarkan komputer lain
+            if (data.last_voice && data.last_voice !== localStorage.getItem('last_played_voice')) {
+                panggilSuara(data.last_voice);
+                localStorage.setItem('last_played_voice', data.last_voice);
+            }
+        } else {
+            // Jika database cloud kosong, upload template awal
+            pushToCloud();
         }
-        updateDisplay();
-    }
+    });
 
-    // FUNGSI MEMANCARKAN DATA AGAR DIDENGAR SEMUA KOMPUTER (Pusher Broadcast Bypass)
-    function pancarkanData(suaraTeks = "") {
-        localStorage.setItem('bpr32_state_pusher', JSON.stringify(state));
-        updateDisplay();
-
-        // Memanfaatkan Relay API Publik bebas CORS untuk memicu event Pusher secara global ke komputer lain
-        // Mengirimkan data via Jembatan WebSocket aman
-        const payload = {
-            state: state,
-            suara: suaraTeks
-        };
-
-        // Mengirim instruksi sinkronisasi eksternal
-        fetch(`https://api.allorigins.win/get?url=${encodeURIComponent('https://jsonip.com')}`)
-        .then(() => {
-            // Mekanisme sinkronisasi fallback internal (pencerminan lokal instan)
-            window.localStorage.setItem('bpr32_state_pusher', JSON.stringify(state));
-        }).catch(() => {});
-
-        // Integrasi Direct Sync Inter-Tab Jaringan
-        const bc = new BroadcastChannel('bpr32_direct_sync');
-        bc.postMessage(payload);
-    }
-
-    // Menangani sinkronisasi instan jika dibuka dalam satu PC atau jaringan inter-proses browser
-    const bc = new BroadcastChannel('bpr32_direct_sync');
-    bc.onmessage = (event) => {
-        state = event.data.state;
-        localStorage.setItem('bpr32_state_pusher', JSON.stringify(state));
-        updateDisplay();
-        if (event.data.suara) panggilSuara(event.data.suara);
-    };
-
-    // Sinkronisasi otomatis cadangan setiap 1 detik demi kestabilan data
-    setInterval(() => {
-        if (localStorage.getItem('bpr32_state_pusher')) {
-            let dataLokal = JSON.parse(localStorage.getItem('bpr32_state_pusher'));
-            if (JSON.stringify(dataLokal) !== JSON.stringify(state)) {
-                state = dataLokal;
-                updateDisplay();
-            }
+    // FUNGSI UNTUK MELEMPAR DATA KE CLOUD AGAR SEMUA PC BERUBAH DETIK ITU JUGA
+    function pushToCloud(suaraTeks = "") {
+        if(suaraTeks) {
+            state.last_voice = suaraTeks;
         }
-    }, 1000);
+        db.set(state);
+    }
 
     function switchRole(role) {
         document.querySelectorAll('.btn-role').forEach(btn => btn.classList.remove('active'));
@@ -231,22 +186,22 @@
             document.getElementById('ticket-area').style.display = 'block';
             document.getElementById('ticket-number').innerText = nomor;
         }
-        pancarkanData();
+        pushToCloud();
     }
 
     function panggilBerikutnya(jenis) {
         if (jenis === 'A') {
             if (state.cs.sekarang < state.cs.total) {
                 state.cs.sekarang += 1;
-                let teksSuara = 'Nomor Antrian A ' + state.cs.sekarang + ' ke Customer Service';
-                pancarkanData(teksSuara);
+                let teks = 'Nomor Antrian A ' + state.cs.sekarang + ' ke Customer Service';
+                pushToCloud(teks);
             } else { alert('Belum ada antrian baru untuk CS'); }
         } else if (jenis === 'B') {
             if (state.teller.sekarang < state.teller.total) {
                 state.teller.sekarang += 1;
                 state.override = ""; 
-                let teksSuara = 'Nomor Antrian B ' + state.teller.sekarang + ' ke Teller';
-                pancarkanData(teksSuara);
+                let teks = 'Nomor Antrian B ' + state.teller.sekarang + ' ke Teller';
+                pushToCloud(teks);
             } else { alert('Belum ada antrian baru untuk Teller'); }
         }
     }
@@ -254,34 +209,35 @@
     function operKeTeller() {
         let nomorSkrg = 'A-' + String(state.cs.sekarang).padStart(3, '0');
         if (state.cs.sekarang > 0) {
+            if (!state.operan) state.operan = [];
             if (!state.operan.includes(nomorSkrg)) {
                 state.operan.push(nomorSkrg);
-                pancarkanData();
+                pushToCloud();
                 alert('Nasabah ' + nomorSkrg + ' berhasil dirujuk ke Teller.');
             } else { alert('Nasabah sudah berada di antrian operan.'); }
         } else { alert('Tidak ada nasabah aktif di CS.'); }
     }
 
     function panggilUlangOperan() {
-        if (state.operan.length > 0) {
+        if (state.operan && state.operan.length > 0) {
             let nomorPanggil = state.operan[0];
             state.override = nomorPanggil;
-            let teksSuara = 'Nomor Antrian ' + nomorPanggil.replace('-', ' ') + ' silahkan ke Teller';
-            pancarkanData(teksSuara);
+            let teks = 'Nomor Antrian ' + nomorPanggil.replace('-', ' ') + ' silahkan ke Teller';
+            pushToCloud(teks);
         }
     }
 
     function selesaiOperan() {
-        if (state.operan.length > 0) {
+        if (state.operan && state.operan.length > 0) {
             let nomorSelesai = state.operan.shift();
             state.override = "";
-            pancarkanData();
+            pushToCloud();
             alert('Nasabah ' + nomorSelesai + ' selesai diproses.');
         }
     }
 
     function updateDisplay() {
-        // Tampilan CS
+        // Render Tampilan CS
         if (state.cs.sekarang > 0) {
             document.getElementById('cs-sekarang').innerText = 'A-' + String(state.cs.sekarang).padStart(3, '0');
             document.getElementById('btn-oper-teller').style.display = 'block';
@@ -291,7 +247,7 @@
         }
         document.getElementById('cs-total').innerText = 'A-' + String(state.cs.total).padStart(3, '0');
 
-        // Tampilan Teller
+        // Render Tampilan Teller
         if (state.override) {
             document.getElementById('teller-sekarang').innerText = state.override;
         } else {
@@ -299,7 +255,7 @@
         }
         document.getElementById('teller-total').innerText = 'B-' + String(state.teller.total).padStart(3, '0');
 
-        // Notifikasi Operan CS -> Teller
+        // Render Box Notif Operan
         let notifBox = document.getElementById('notif-dari-cs');
         let nomorOperanSpan = document.getElementById('nomor-operan');
         if (state.operan && state.operan.length > 0) {
@@ -312,7 +268,7 @@
 
     function panggilSuara(text) {
         if ('speechSynthesis' in window) {
-            window.speechSynthesis.cancel(); // Matikan penumpukan suara
+            window.speechSynthesis.cancel();
             let speech = new SpeechSynthesisUtterance(text);
             speech.lang = 'id-ID';
             speech.rate = 0.85;
@@ -321,15 +277,12 @@
     }
 
     function resetAntrian() {
-        if (confirm('Reset ulang semua nomor antrian ke nol?')) {
-            state = { cs: { total: 0, sekarang: 0 }, teller: { total: 0, sekarang: 0 }, operan: [], override: "" };
+        if (confirm('Reset ulang semua nomor antrian ke nol di cloud server?')) {
+            state = { cs: { total: 0, sekarang: 0 }, teller: { total: 0, sekarang: 0 }, operan: [], override: "", last_voice: "Reset" };
             document.getElementById('ticket-area').style.display = 'none';
-            pancarkanData();
+            db.set(state);
         }
     }
-
-    // Jalankan jaringan Pusher
-    initNetwork();
 </script>
 </body>
 </html>
