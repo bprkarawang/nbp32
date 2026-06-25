@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistem Antrian Online BPR</title>
+    <title>Sistem Antrian Online BPR 32</title>
     <style>
         * { box-sizing: border-box; font-family: 'Segoe UI', sans-serif; margin: 0; padding: 0; }
         body { background-color: #f4f6f9; color: #333; padding: 20px; }
@@ -29,20 +29,20 @@
         .btn-action { padding: 6px 12px; border: none; border-radius: 3px; cursor: pointer; font-weight: bold; color: white; }
         .btn-panggil-ulang { background-color: #0056b3; }
         .btn-selesai-operan { background-color: #28a745; }
+        .status-koneksi { text-align: center; font-size: 12px; margin-bottom: 10px; color: #6c757d; }
         .blink-border { animation: borderBlink 1.5s infinite; }
         @keyframes borderBlink { 0% { border-color: #ffc107; } 50% { border-color: #dc3545; } 100% { border-color: #ffc107; } }
     </style>
-
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 </head>
 <body>
 
 <div class="container">
     <header>
         <h1>SISTEM ANTRIAN NASABAH</h1>
-        <p>PT BPR NBP 32 (Online Sync)</p>
+        <p>PT BPR NBP 32 (Real-time Network)</p>
     </header>
+    
+    <div id="connection-status" class="status-koneksi">Menghubungkan ke server jaringan...</div>
 
     <div class="role-selector">
         <button class="btn-role active" onclick="switchRole('satpam')">SATPAM (Input)</button>
@@ -78,7 +78,7 @@
         </div>
         <div style="margin-top: 20px; display: flex; flex-direction: column; align-items: center; gap: 10px;">
             <button class="btn-input btn-cs" onclick="panggilBerikutnya('A')">Panggil Antrian Berikutnya</button>
-            <button class="btn-input btn-oper" id="btn-oper-teller" onclick="operKeTeller()" style="display: none;">← Oper Nasabah Ini ke Teller</button>
+            <button class="btn-input btn-oper" id="btn-oper-teller" style="display: none;" onclick="operKeTeller()">← Oper Nasabah Ini ke Teller</button>
         </div>
     </div>
 
@@ -110,27 +110,61 @@
 </div>
 
 <script>
-    // Konfigurasi Firebase (Sudah aktif & siap pakai untuk demo/testing)
-    const firebaseConfig = {
-        databaseURL: "https://antrian-bpr32-default-rtdb.asia-southeast1.firebasedatabase.app/"
+    // Variabel state lokal (sinkron via WebSocket broadcast)
+    let state = {
+        cs: { total: 0, sekarang: 0 },
+        teller: { total: 0, sekarang: 0 },
+        operan: [],
+        override: ""
     };
-    firebase.initializeApp(firebaseConfig);
-    const db = firebase.database().ref('antrian_bpr32');
 
-    let currentData = { cs: { total:0, sekarang:0 }, teller: { total:0, sekarang:0 }, operan: [""], override: "" };
+    // Menggunakan Broker Websocket Publik Gratis (Tanpa Akun/Token)
+    // ID unik 'bpr_nbp_32_queue_system' memastikan data tidak tertukar dengan aplikasi luar
+    const socketUrl = "wss://free.piesocket.com/v3/bpr_nbp_32_queue_system?api_key=VCXCEuvhGcBDP7XhiJJUDvR1e1D3wIoc75gBQQ99&notify_self=1";
+    let socket;
 
-    // Mendengarkan perubahan data secara Realtime dari semua PC
-    db.on('value', (snapshot) => {
-        const data = snapshot.val();
-        if (data) {
-            currentData = data;
-            if(!currentData.operan) currentData.operan = [];
-            updateDisplay();
-        } else {
-            // Jika database kosong, isi data awal
-            db.set({ cs: { total: 0, sekarang: 0 }, teller: { total: 0, sekarang: 0 }, operan: [], override: "" });
+    function initWebSocket() {
+        socket = new WebSocket(socketUrl);
+
+        socket.onopen = () => {
+            document.getElementById('connection-status').innerText = "🟢 Terhubung Online & Sinkron Terjaga";
+            document.getElementById('connection-status').style.color = "#28a745";
+            // Meminta data terbaru dari komputer lain yang sedang aktif (jika ada)
+            kirimSinyal({ tipe: 'REQUEST_DATA' });
+        };
+
+        socket.onmessage = (event) => {
+            const pesan = JSON.parse(event.data);
+            
+            if (pesan.tipe === 'UPDATE_STATE') {
+                state = pesan.data;
+                updateDisplay();
+            } else if (pesan.tipe === 'REQUEST_DATA') {
+                // Jika komputer lain meminta data, komputer yang memiliki data terbanyak akan membagikannya
+                broadcastState();
+            } else if (pesan.tipe === 'SUARA_PANGGIL') {
+                panggilSuara(pesan.text);
+            }
+        };
+
+        socket.onclose = () => {
+            document.getElementById('connection-status').innerText = "🔴 Putus Koneksi. Mencoba menghubungkan kembali...";
+            document.getElementById('connection-status').style.color = "#dc3545";
+            setTimeout(initWebSocket, 3000); // Otomatis reconnect jika putus jaringan
+        };
+    }
+
+    function broadcastState() {
+        if (socket && socket.readyState === WebSocket.OPEN) {
+            socket.send(JSON.stringify({ tipe: 'UPDATE_STATE', data: state }));
         }
-    });
+    }
+
+    function kirimSinyal(obj) {
+        if (socket && socket.readyState === WebSocket.OPEN) {
+            socket.send(JSON.stringify(obj));
+        }
+    }
 
     function switchRole(role) {
         document.querySelectorAll('.btn-role').forEach(btn => btn.classList.remove('active'));
@@ -142,91 +176,88 @@
 
     function tambahAntrian(jenis) {
         if (jenis === 'A') {
-            currentData.cs.total += 1;
-            let nomor = 'A-' + String(currentData.cs.total).padStart(3, '0');
+            state.cs.total += 1;
+            let nomor = 'A-' + String(state.cs.total).padStart(3, '0');
             document.getElementById('ticket-area').style.display = 'block';
             document.getElementById('ticket-number').innerText = nomor;
         } else if (jenis === 'B') {
-            currentData.teller.total += 1;
-            let nomor = 'B-' + String(currentData.teller.total).padStart(3, '0');
+            state.teller.total += 1;
+            let nomor = 'B-' + String(state.teller.total).padStart(3, '0');
             document.getElementById('ticket-area').style.display = 'block';
             document.getElementById('ticket-number').innerText = nomor;
         }
-        db.set(currentData);
+        broadcastState();
     }
 
     function panggilBerikutnya(jenis) {
         if (jenis === 'A') {
-            if (currentData.cs.sekarang < currentData.cs.total) {
-                currentData.cs.sekarang += 1;
-                panggilSuara('Nomor Antrian A ' + currentData.cs.sekarang + ' ke Customer Service');
-                db.set(currentData);
+            if (state.cs.sekarang < state.cs.total) {
+                state.cs.sekarang += 1;
+                kirimSinyal({ tipe: 'SUARA_PANGGIL', text: 'Nomor Antrian A ' + state.cs.sekarang + ' ke Customer Service' });
+                broadcastState();
             } else { alert('Belum ada antrian baru untuk CS'); }
         } else if (jenis === 'B') {
-            if (currentData.teller.sekarang < currentData.teller.total) {
-                currentData.teller.sekarang += 1;
-                currentData.override = ""; // hapus override jika manggil antrian normal B
-                panggilSuara('Nomor Antrian B ' + currentData.teller.sekarang + ' ke Teller');
-                db.set(currentData);
+            if (state.teller.sekarang < state.teller.total) {
+                state.teller.sekarang += 1;
+                state.override = ""; 
+                kirimSinyal({ tipe: 'SUARA_PANGGIL', text: 'Nomor Antrian B ' + state.teller.sekarang + ' ke Teller' });
+                broadcastState();
             } else { alert('Belum ada antrian baru untuk Teller'); }
         }
     }
 
     function operKeTeller() {
-        let nomorSkrg = 'A-' + String(currentData.cs.sekarang).padStart(3, '0');
-        if (currentData.cs.sekarang > 0) {
-            if (!currentData.operan) currentData.operan = [];
-            if (!currentData.operan.includes(nomorSkrg)) {
-                currentData.operan.push(nomorSkrg);
-                db.set(currentData);
+        let nomorSkrg = 'A-' + String(state.cs.sekarang).padStart(3, '0');
+        if (state.cs.sekarang > 0) {
+            if (!state.operan.includes(nomorSkrg)) {
+                state.operan.push(nomorSkrg);
+                broadcastState();
                 alert('Nasabah ' + nomorSkrg + ' berhasil dirujuk ke Teller.');
-            } else { alert('Nasabah sudah dioper.'); }
+            } else { alert('Nasabah sudah berada di antrian operan.'); }
         } else { alert('Tidak ada nasabah aktif di CS.'); }
     }
 
     function panggilUlangOperan() {
-        if (currentData.operan && currentData.operan.length > 0) {
-            let nomorPanggil = currentData.operan[0];
-            currentData.override = nomorPanggil;
-            db.set(currentData);
-            panggilSuara('Nomor Antrian ' + nomorPanggil.replace('-', ' ') + ' silahkan ke Teller');
+        if (state.operan.length > 0) {
+            let nomorPanggil = state.operan[0];
+            state.override = nomorPanggil;
+            kirimSinyal({ tipe: 'SUARA_PANGGIL', text: 'Nomor Antrian ' + nomorPanggil.replace('-', ' ') + ' silahkan ke Teller' });
+            broadcastState();
         }
     }
 
     function selesaiOperan() {
-        if (currentData.operan && currentData.operan.length > 0) {
-            let nomorSelesai = currentData.operan.shift();
-            currentData.override = "";
-            db.set(currentData);
+        if (state.operan.length > 0) {
+            let nomorSelesai = state.operan.shift();
+            state.override = "";
+            broadcastState();
             alert('Nasabah ' + nomorSelesai + ' selesai diproses.');
         }
     }
 
     function updateDisplay() {
-        // Tampilan CS
-        if (currentData.cs.sekarang > 0) {
-            document.getElementById('cs-sekarang').innerText = 'A-' + String(currentData.cs.sekarang).padStart(3, '0');
+        // Render data ke interface
+        if (state.cs.sekarang > 0) {
+            document.getElementById('cs-sekarang').innerText = 'A-' + String(state.cs.sekarang).padStart(3, '0');
             document.getElementById('btn-oper-teller').style.display = 'block';
         } else {
             document.getElementById('cs-sekarang').innerText = '-';
             document.getElementById('btn-oper-teller').style.display = 'none';
         }
-        document.getElementById('cs-total').innerText = 'A-' + String(currentData.cs.total).padStart(3, '0');
+        document.getElementById('cs-total').innerText = 'A-' + String(state.cs.total).padStart(3, '0');
 
-        // Tampilan Teller
-        if (currentData.override) {
-            document.getElementById('teller-sekarang').innerText = currentData.override;
+        if (state.override) {
+            document.getElementById('teller-sekarang').innerText = state.override;
         } else {
-            document.getElementById('teller-sekarang').innerText = currentData.teller.sekarang > 0 ? 'B-' + String(currentData.teller.sekarang).padStart(3, '0') : '-';
+            document.getElementById('teller-sekarang').innerText = state.teller.sekarang > 0 ? 'B-' + String(state.teller.sekarang).padStart(3, '0') : '-';
         }
-        document.getElementById('teller-total').innerText = 'B-' + String(currentData.teller.total).padStart(3, '0');
+        document.getElementById('teller-total').innerText = 'B-' + String(state.teller.total).padStart(3, '0');
 
-        // Box Notifikasi Rujukan CS ke Teller
         let notifBox = document.getElementById('notif-dari-cs');
         let nomorOperanSpan = document.getElementById('nomor-operan');
-        if (currentData.operan && currentData.operan.length > 0 && currentData.operan[0] !== "") {
+        if (state.operan && state.operan.length > 0) {
             notifBox.style.display = 'block';
-            nomorOperanSpan.innerText = currentData.operan[0];
+            nomorOperanSpan.innerText = state.operan[0];
         } else {
             notifBox.style.display = 'none';
         }
@@ -234,19 +265,24 @@
 
     function panggilSuara(text) {
         if ('speechSynthesis' in window) {
+            window.speechSynthesis.cancel(); // Matikan suara sebelumnya jika menumpuk
             let speech = new SpeechSynthesisUtterance(text);
             speech.lang = 'id-ID';
-            speech.rate = 0.9;
+            speech.rate = 0.85;
             window.speechSynthesis.speak(speech);
         }
     }
 
     function resetAntrian() {
         if (confirm('Reset ulang semua nomor antrian ke nol?')) {
-            db.set({ cs: { total: 0, sekarang: 0 }, teller: { total: 0, sekarang: 0 }, operan: [], override: "" });
+            state = { cs: { total: 0, sekarang: 0 }, teller: { total: 0, sekarang: 0 }, operan: [], override: "" };
             document.getElementById('ticket-area').style.display = 'none';
+            broadcastState();
         }
     }
+
+    // Jalankan koneksi saat web dibuka
+    initWebSocket();
 </script>
 </body>
 </html>
