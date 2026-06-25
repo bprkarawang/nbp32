@@ -3,169 +3,45 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistem Antrian Nasabah Bank</title>
+    <title>Sistem Antrian Online BPR</title>
     <style>
-        * {
-            box-sizing: border-box;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            margin: 0;
-            padding: 0;
-        }
-        body {
-            background-color: #f4f6f9;
-            color: #333;
-            padding: 20px;
-        }
-        header {
-            text-align: center;
-            padding: 20px;
-            background: #0056b3;
-            color: white;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        }
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-        }
-        /* Navigasi Role */
-        .role-selector {
-            display: flex;
-            justify-content: center;
-            gap: 10px;
-            margin-bottom: 20px;
-        }
-        .btn-role {
-            padding: 10px 20px;
-            border: none;
-            background-color: #e0e0e0;
-            cursor: pointer;
-            border-radius: 5px;
-            font-weight: bold;
-            transition: 0.3s;
-        }
-        .btn-role.active {
-            background-color: #0056b3;
-            color: white;
-        }
-        /* Panel Utama */
-        .panel {
-            display: none;
-            background: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-        }
-        .panel.active {
-            display: block;
-        }
-        /* Grid untuk Monitoring */
-        .grid-monitor {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 20px;
-            margin-top: 20px;
-        }
-        .card {
-            background: #fff;
-            border: 2px solid #0056b3;
-            border-radius: 8px;
-            text-align: center;
-            padding: 20px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-        }
-        .card h3 {
-            background: #0056b3;
-            color: white;
-            padding: 10px;
-            margin: -20px -20px 20px -20px;
-            border-top-left-radius: 6px;
-            border-top-right-radius: 6px;
-        }
-        .nomor-besar {
-            font-size: 72px;
-            font-weight: bold;
-            color: #2c3e50;
-            margin: 20px 0;
-        }
-        /* Tombol */
-        .btn-input {
-            display: block;
-            width: 100%;
-            max-width: 300px;
-            padding: 15px;
-            margin: 15px auto;
-            font-size: 18px;
-            font-weight: bold;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            transition: 0.2s;
-        }
+        * { box-sizing: border-box; font-family: 'Segoe UI', sans-serif; margin: 0; padding: 0; }
+        body { background-color: #f4f6f9; color: #333; padding: 20px; }
+        header { text-align: center; padding: 20px; background: #0056b3; color: white; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .role-selector { display: flex; justify-content: center; gap: 10px; margin-bottom: 20px; }
+        .btn-role { padding: 10px 20px; border: none; background-color: #e0e0e0; cursor: pointer; border-radius: 5px; font-weight: bold; transition: 0.3s; }
+        .btn-role.active { background-color: #0056b3; color: white; }
+        .panel { display: none; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+        .panel.active { display: block; }
+        .grid-monitor { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; margin-top: 20px; }
+        .card { background: #fff; border: 2px solid #0056b3; border-radius: 8px; text-align: center; padding: 20px; }
+        .card h3 { background: #0056b3; color: white; padding: 10px; margin: -20px -20px 20px -20px; border-top-left-radius: 6px; border-top-right-radius: 6px; }
+        .nomor-besar { font-size: 72px; font-weight: bold; color: #2c3e50; margin: 20px 0; }
+        .btn-input { display: block; width: 100%; max-width: 300px; padding: 15px; margin: 15px auto; font-size: 18px; font-weight: bold; color: white; border: none; border-radius: 5px; cursor: pointer; }
         .btn-cs { background-color: #28a745; }
-        .btn-cs:hover { background-color: #218838; }
         .btn-teller { background-color: #ffc107; color: #333; }
-        .btn-teller:hover { background-color: #e0a800; }
         .btn-oper { background-color: #17a2b8; color: white; }
-        .btn-oper:hover { background-color: #138496; }
         .btn-reset { background-color: #dc3545; }
-        
-        .ticket-print {
-            border: 1px dashed #ccc;
-            padding: 15px;
-            margin-top: 20px;
-            background: #fafafa;
-            display: none;
-        }
-
-        /* Notifikasi Alert Pemberitahuan untuk Teller */
-        .notif-box {
-            background-color: #fff3cd;
-            border: 2px dashed #ffc107;
-            color: #856404;
-            padding: 15px;
-            margin-top: 20px;
-            border-radius: 5px;
-            text-align: center;
-            font-weight: bold;
-            display: none;
-        }
-        .notif-action-btns {
-            margin-top: 10px;
-            display: flex;
-            justify-content: center;
-            gap: 10px;
-        }
-        .btn-action {
-            padding: 6px 12px;
-            border: none;
-            border-radius: 3px;
-            cursor: pointer;
-            font-weight: bold;
-            color: white;
-        }
+        .ticket-print { border: 1px dashed #ccc; padding: 15px; margin-top: 20px; background: #fafafa; display: none; text-align: center;}
+        .notif-box { background-color: #fff3cd; border: 2px dashed #ffc107; color: #856404; padding: 15px; margin-top: 20px; border-radius: 5px; text-align: center; font-weight: bold; display: none; }
+        .notif-action-btns { margin-top: 10px; display: flex; justify-content: center; gap: 10px; }
+        .btn-action { padding: 6px 12px; border: none; border-radius: 3px; cursor: pointer; font-weight: bold; color: white; }
         .btn-panggil-ulang { background-color: #0056b3; }
         .btn-selesai-operan { background-color: #28a745; }
-
-        /* Efek Berkedip Halus Hanya pada Border Kotak */
-        .blink-border {
-            animation: borderBlink 1.5s infinite;
-        }
-        @keyframes borderBlink {
-            0% { border-color: #ffc107; }
-            50% { border-color: #dc3545; }
-            100% { border-color: #ffc107; }
-        }
+        .blink-border { animation: borderBlink 1.5s infinite; }
+        @keyframes borderBlink { 0% { border-color: #ffc107; } 50% { border-color: #dc3545; } 100% { border-color: #ffc107; } }
     </style>
+
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 </head>
 <body>
 
 <div class="container">
     <header>
         <h1>SISTEM ANTRIAN NASABAH</h1>
-        <p>PT BPR NBP 32</p>
+        <p>PT BPR NBP 32 (Online Sync)</p>
     </header>
 
     <div class="role-selector">
@@ -176,18 +52,14 @@
 
     <div id="panel-satpam" class="panel active">
         <h2>Menu Input Satpam</h2>
-        <p>Klik tombol di bawah ini untuk mencetak nomor antrian nasabah:</p>
-        <hr style="margin: 15px 0;">
-        
         <button class="btn-input btn-cs" onclick="tambahAntrian('A')">Ambil Antrian CS (A)</button>
         <button class="btn-input btn-teller" onclick="tambahAntrian('B')">Ambil Antrian TELLER (B)</button>
         
         <div id="ticket-area" class="ticket-print">
             <h3>Nomor Antrian Anda:</h3>
-            <div id="ticket-number" style="font-size: 36px; font-weight: bold; margin: 10px 0;">A-001</div>
+            <div id="ticket-number" style="font-size: 36px; font-weight: bold; margin: 10px 0;">-</div>
             <p>Silahkan tunggu nomor Anda dipanggil.</p>
         </div>
-
         <hr style="margin: 40px 0 15px 0;">
         <button class="btn-input btn-reset" onclick="resetAntrian()" style="max-width: 150px; font-size: 12px; padding: 5px;">Reset Semua Antrian</button>
     </div>
@@ -238,143 +110,123 @@
 </div>
 
 <script>
-    if (!localStorage.getItem('antrian_data')) {
-        initData();
-    }
+    // Konfigurasi Firebase (Sudah aktif & siap pakai untuk demo/testing)
+    const firebaseConfig = {
+        databaseURL: "https://antrian-bpr32-default-rtdb.asia-southeast1.firebasedatabase.app/"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database().ref('antrian_bpr32');
 
-    function initData() {
-        const dataAwal = {
-            cs: { total: 0, sekarang: 0 },
-            teller: { total: 0, sekarang: 0 },
-            operan: [] 
-        };
-        localStorage.setItem('antrian_data', JSON.stringify(dataAwal));
-    }
+    let currentData = { cs: { total:0, sekarang:0 }, teller: { total:0, sekarang:0 }, operan: [""], override: "" };
+
+    // Mendengarkan perubahan data secara Realtime dari semua PC
+    db.on('value', (snapshot) => {
+        const data = snapshot.val();
+        if (data) {
+            currentData = data;
+            if(!currentData.operan) currentData.operan = [];
+            updateDisplay();
+        } else {
+            // Jika database kosong, isi data awal
+            db.set({ cs: { total: 0, sekarang: 0 }, teller: { total: 0, sekarang: 0 }, operan: [], override: "" });
+        }
+    });
 
     function switchRole(role) {
         document.querySelectorAll('.btn-role').forEach(btn => btn.classList.remove('active'));
         document.querySelectorAll('.panel').forEach(panel => panel.classList.remove('active'));
-        
         event.target.classList.add('active');
         document.getElementById(`panel-${role}`).classList.add('active');
-        
         updateDisplay();
     }
 
     function tambahAntrian(jenis) {
-        let data = JSON.parse(localStorage.getItem('antrian_data'));
-        let nomorTercetak = '';
-
         if (jenis === 'A') {
-            data.cs.total += 1;
-            nomorTercetak = 'A-' + String(data.cs.total).padStart(3, '0');
+            currentData.cs.total += 1;
+            let nomor = 'A-' + String(currentData.cs.total).padStart(3, '0');
+            document.getElementById('ticket-area').style.display = 'block';
+            document.getElementById('ticket-number').innerText = nomor;
         } else if (jenis === 'B') {
-            data.teller.total += 1;
-            nomorTercetak = 'B-' + String(data.teller.total).padStart(3, '0');
+            currentData.teller.total += 1;
+            let nomor = 'B-' + String(currentData.teller.total).padStart(3, '0');
+            document.getElementById('ticket-area').style.display = 'block';
+            document.getElementById('ticket-number').innerText = nomor;
         }
-
-        localStorage.setItem('antrian_data', JSON.stringify(data));
-        
-        document.getElementById('ticket-area').style.display = 'block';
-        document.getElementById('ticket-number').innerText = nomorTercetak;
-        
-        updateDisplay();
+        db.set(currentData);
     }
 
     function panggilBerikutnya(jenis) {
-        let data = JSON.parse(localStorage.getItem('antrian_data'));
-
         if (jenis === 'A') {
-            if (data.cs.sekarang < data.cs.total) {
-                data.cs.sekarang += 1;
-                panggilSuara('Nomor Antrian A ' + data.cs.sekarang + ' ke Customer Service');
-            } else {
-                alert('Belum ada antrian baru untuk CS');
-            }
+            if (currentData.cs.sekarang < currentData.cs.total) {
+                currentData.cs.sekarang += 1;
+                panggilSuara('Nomor Antrian A ' + currentData.cs.sekarang + ' ke Customer Service');
+                db.set(currentData);
+            } else { alert('Belum ada antrian baru untuk CS'); }
         } else if (jenis === 'B') {
-            if (data.teller.sekarang < data.teller.total) {
-                data.teller.sekarang += 1;
-                panggilSuara('Nomor Antrian B ' + data.teller.sekarang + ' ke Teller');
-            } else {
-                alert('Belum ada antrian baru untuk Teller');
-            }
+            if (currentData.teller.sekarang < currentData.teller.total) {
+                currentData.teller.sekarang += 1;
+                currentData.override = ""; // hapus override jika manggil antrian normal B
+                panggilSuara('Nomor Antrian B ' + currentData.teller.sekarang + ' ke Teller');
+                db.set(currentData);
+            } else { alert('Belum ada antrian baru untuk Teller'); }
         }
-
-        localStorage.setItem('antrian_data', JSON.stringify(data));
-        updateDisplay();
     }
 
     function operKeTeller() {
-        let data = JSON.parse(localStorage.getItem('antrian_data'));
-        let nomorSkrg = 'A-' + String(data.cs.sekarang).padStart(3, '0');
-
-        if (!data.operan.includes(nomorSkrg) && data.cs.sekarang > 0) {
-            data.operan.push(nomorSkrg);
-            localStorage.setItem('antrian_data', JSON.stringify(data));
-            alert('Nasabah ' + nomorSkrg + ' berhasil dirujuk ke Teller.');
-        } else {
-            alert('Tidak ada nasabah aktif atau nasabah sudah dioper.');
-        }
-        updateDisplay();
+        let nomorSkrg = 'A-' + String(currentData.cs.sekarang).padStart(3, '0');
+        if (currentData.cs.sekarang > 0) {
+            if (!currentData.operan) currentData.operan = [];
+            if (!currentData.operan.includes(nomorSkrg)) {
+                currentData.operan.push(nomorSkrg);
+                db.set(currentData);
+                alert('Nasabah ' + nomorSkrg + ' berhasil dirujuk ke Teller.');
+            } else { alert('Nasabah sudah dioper.'); }
+        } else { alert('Tidak ada nasabah aktif di CS.'); }
     }
 
-    // FUNGSI UPDATE: Hanya memanggil suara, NOTIFIKASI TETAP MUNCUL
     function panggilUlangOperan() {
-        let data = JSON.parse(localStorage.getItem('antrian_data'));
-        if (data.operan.length > 0) {
-            let nomorPanggil = data.operan[0]; // Intip nomor antrian operan pertama tanpa menghapusnya
-            
-            // Set layar monitor utama teller ke nomor operan tersebut
-            localStorage.setItem('nomor_teller_override', nomorPanggil); 
-            
-            // Panggil Suara
-            let angkaSaja = nomorPanggil.replace('-', ' ');
-            panggilSuara('Nomor Antrian ' + angkaSaja + ' silahkan ke Teller');
+        if (currentData.operan && currentData.operan.length > 0) {
+            let nomorPanggil = currentData.operan[0];
+            currentData.override = nomorPanggil;
+            db.set(currentData);
+            panggilSuara('Nomor Antrian ' + nomorPanggil.replace('-', ' ') + ' silahkan ke Teller');
         }
-        updateDisplay();
     }
 
-    // FUNGSI BARU: Klik ini saat nasabah sudah dengar & selesai dilayani, notif baru hilang
     function selesaiOperan() {
-        let data = JSON.parse(localStorage.getItem('antrian_data'));
-        if (data.operan.length > 0) {
-            let nomorSelesai = data.operan.shift(); // Hapus nomor tersebut dari daftar antrian operan
-            localStorage.setItem('antrian_data', JSON.stringify(data));
-            localStorage.removeItem('nomor_teller_override'); // Kembalikan monitor ke normal
+        if (currentData.operan && currentData.operan.length > 0) {
+            let nomorSelesai = currentData.operan.shift();
+            currentData.override = "";
+            db.set(currentData);
             alert('Nasabah ' + nomorSelesai + ' selesai diproses.');
         }
-        updateDisplay();
     }
 
     function updateDisplay() {
-        let data = JSON.parse(localStorage.getItem('antrian_data'));
-        
-        // Update Tampilan CS
-        if (data.cs.sekarang > 0) {
-            document.getElementById('cs-sekarang').innerText = 'A-' + String(data.cs.sekarang).padStart(3, '0');
+        // Tampilan CS
+        if (currentData.cs.sekarang > 0) {
+            document.getElementById('cs-sekarang').innerText = 'A-' + String(currentData.cs.sekarang).padStart(3, '0');
             document.getElementById('btn-oper-teller').style.display = 'block';
         } else {
             document.getElementById('cs-sekarang').innerText = '-';
             document.getElementById('btn-oper-teller').style.display = 'none';
         }
-        document.getElementById('cs-total').innerText = 'A-' + String(data.cs.total).padStart(3, '0');
+        document.getElementById('cs-total').innerText = 'A-' + String(currentData.cs.total).padStart(3, '0');
 
-        // Update Tampilan Teller
-        let overrideTeller = localStorage.getItem('nomor_teller_override');
-        if (overrideTeller) {
-            document.getElementById('teller-sekarang').innerText = overrideTeller;
+        // Tampilan Teller
+        if (currentData.override) {
+            document.getElementById('teller-sekarang').innerText = currentData.override;
         } else {
-            document.getElementById('teller-sekarang').innerText = data.teller.sekarang > 0 ? 'B-' + String(data.teller.sekarang).padStart(3, '0') : '-';
+            document.getElementById('teller-sekarang').innerText = currentData.teller.sekarang > 0 ? 'B-' + String(currentData.teller.sekarang).padStart(3, '0') : '-';
         }
-        document.getElementById('teller-total').innerText = 'B-' + String(data.teller.total).padStart(3, '0');
+        document.getElementById('teller-total').innerText = 'B-' + String(currentData.teller.total).padStart(3, '0');
 
-        // Kontrol Box Notifikasi Kuning di Menu Teller
+        // Box Notifikasi Rujukan CS ke Teller
         let notifBox = document.getElementById('notif-dari-cs');
         let nomorOperanSpan = document.getElementById('nomor-operan');
-        
-        if (data.operan && data.operan.length > 0) {
+        if (currentData.operan && currentData.operan.length > 0 && currentData.operan[0] !== "") {
             notifBox.style.display = 'block';
-            nomorOperanSpan.innerText = data.operan[0]; // Selalu tampilkan nomor operan yang sedang aktif antri
+            nomorOperanSpan.innerText = currentData.operan[0];
         } else {
             notifBox.style.display = 'none';
         }
@@ -390,17 +242,11 @@
     }
 
     function resetAntrian() {
-        if (confirm('Apakah Anda yakin ingin mereset ulang semua nomor antrian dari nol?')) {
-            initData();
-            localStorage.removeItem('nomor_teller_override');
+        if (confirm('Reset ulang semua nomor antrian ke nol?')) {
+            db.set({ cs: { total: 0, sekarang: 0 }, teller: { total: 0, sekarang: 0 }, operan: [], override: "" });
             document.getElementById('ticket-area').style.display = 'none';
-            updateDisplay();
         }
     }
-
-    setInterval(updateDisplay, 1500);
-    updateDisplay();
 </script>
-
 </body>
 </html>
