@@ -167,18 +167,32 @@ function broadcastVoice(teks) {
 
     panggilSuara(teks);
 function panggilSuara(text) {
-    if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
+    if (!('speechSynthesis' in window)) return;
 
-        let speech = new SpeechSynthesisUtterance(text);
+    const synth = window.speechSynthesis;
+    synth.cancel();
+
+    const speech = new SpeechSynthesisUtterance(text);
+    speech.rate = 0.75;
+    speech.volume = 1;
+    speech.pitch = 1;
+
+    const voices = synth.getVoices();
+
+    const voiceID = voices.find(v =>
+        v.lang.toLowerCase().includes('id')
+    );
+
+    if (voiceID) {
+        speech.voice = voiceID;
+        speech.lang = voiceID.lang;
+    } else {
         speech.lang = 'id-ID';
-        speech.rate = 0.75;
-        speech.volume = 1;
-        speech.pitch = 1;
-
-        window.speechSynthesis.speak(speech);
     }
+
+    synth.speak(speech);
 }
+    
     kirimDataKeCloud();
 }
    function kirimDataKeCloud() {
