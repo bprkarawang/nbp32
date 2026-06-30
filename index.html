@@ -158,14 +158,39 @@ if (
         })
         .catch(err => console.error("Koneksi HTTP Terganggu:", err));
     }
-function broadcastVoice(teks) {
+// --- CACHE DAFTAR VOICE TTS ---
+// getVoices() di banyak browser (terutama Chrome) butuh waktu untuk memuat
+// daftar suara secara asinkron. Kalau langsung dipanggil tanpa menunggu,
+// daftarnya bisa kosong sehingga voice Indonesia tidak ketemu meskipun
+// sebenarnya terpasang di PC tersebut. Maka kita cache & dengarkan event
+// 'voiceschanged' supaya daftar selalu ter-update.
+let cachedVoices = [];
+let voiceWarningShown = false;
 
-    state.last_voice = {
-        text: teks,
-        id: Date.now()
-    };
+function muatDaftarVoice() {
+    if (!('speechSynthesis' in window)) return;
+    const list = window.speechSynthesis.getVoices();
+    if (list && list.length > 0) {
+        cachedVoices = list;
+    }
+}
 
-    panggilSuara(teks);
+if ('speechSynthesis' in window) {
+    muatDaftarVoice();
+    window.speechSynthesis.onvoiceschanged = muatDaftarVoice;
+}
+
+function cariVoiceIndonesia() {
+    if (!cachedVoices || cachedVoices.length === 0) {
+        muatDaftarVoice();
+    }
+    // Cek lewat kode bahasa (id-ID / id_ID) DAN lewat nama voice,
+    // karena beberapa browser/OS memberi label voice yang tidak konsisten
+    // (mis. lang-nya 'en-US' tapi nama voice-nya mengandung 'Indonesia').
+    return cachedVoices.find(v => v.lang.toLowerCase().includes('id')) ||
+           cachedVoices.find(v => v.name.toLowerCase().includes('indonesia'));
+}
+
 function panggilSuara(text) {
     if (!('speechSynthesis' in window)) return;
 
@@ -177,22 +202,40 @@ function panggilSuara(text) {
     speech.volume = 1;
     speech.pitch = 1;
 
-    const voices = synth.getVoices();
-
-    const voiceID = voices.find(v =>
-        v.lang.toLowerCase().includes('id')
-    );
+    const voiceID = cariVoiceIndonesia();
 
     if (voiceID) {
         speech.voice = voiceID;
         speech.lang = voiceID.lang;
     } else {
+        // Tidak ada voice Indonesia terpasang di PC ini.
+        // Tetap set lang id-ID (supaya browser yang punya cukup 1 voice
+        // multi-bahasa bisa menyesuaikan), tapi beri tahu admin sekali saja
+        // lewat console + indikator kecil di status koneksi, karena ini
+        // masalah instalasi voice pack di PC tsb, bukan bug aplikasi.
         speech.lang = 'id-ID';
+        if (!voiceWarningShown) {
+            voiceWarningShown = true;
+            console.warn('[TTS] Voice Bahasa Indonesia tidak ditemukan di PC ini. ' +
+                'Suara panggilan akan memakai voice default sistem (kemungkinan beraksen Inggris). ' +
+                'Tambahkan voice Indonesia lewat Settings > Time & Language > Speech > Add a voice.');
+            const statusEl = document.getElementById('connection-status');
+            if (statusEl) {
+                statusEl.innerHTML += ' &nbsp;|&nbsp; ⚠️ Voice ID tidak terpasang di PC ini';
+            }
+        }
     }
 
     synth.speak(speech);
 }
-    
+
+function broadcastVoice(teks) {
+    state.last_voice = {
+        text: teks,
+        id: Date.now()
+    };
+
+    panggilSuara(teks);
     kirimDataKeCloud();
 }
    function kirimDataKeCloud() {
